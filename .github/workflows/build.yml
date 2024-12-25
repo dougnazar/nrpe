@@ -1,0 +1,44 @@
+name: NRPE Tests
+
+on:
+  push:
+    branches: [ "master", "work3" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: nrpe
+
+    - name: configure
+      run: |
+        mkdir build
+        cd build
+        ../nrpe/configure
+    - name: build
+      run: |
+        cd build
+        make all
+    - name: test
+      run: |
+        cd build
+        make test
+
+    - name: configure no ssl
+      run: |
+        mkdir build_nossl
+        cd build_nossl
+        ../nrpe/configure --disable-ssl
+    - name: build no ssl
+      run: |
+        cd build_nossl
+        make all
+    - name: test no ssl
+      run: |
+        cd build_nossl
+        make test
