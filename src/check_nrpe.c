@@ -925,7 +925,7 @@ int connect_to_remote()
 		if (ssl_err == 5) {
 			/* Often, errno will be zero, so print a generic message here */
 			if (ern == 0)
-				printf("CHECK_NRPE: Error - Could not connect to %s. Check system logs on %s\n", rem_host, rem_host);
+				printf("CHECK_NRPE: Error - Could not connect to %s: Check system logs on %s\n", rem_host, rem_host);
 			else
 				printf("CHECK_NRPE: Error - Could not connect to %s: %s\n", rem_host, strerror(ern));
 		} else {
@@ -942,7 +942,8 @@ int connect_to_remote()
 		 */
 		ERR_print_errors_fp(stdout);
 # endif
-		result = timeout_return_code;
+		/* fb4bdfa says we should be returning UNKOWN to match the non-SSL case*/
+		result = STATE_UNKNOWN;
 
 	} else {
 
@@ -1090,7 +1091,7 @@ int read_response()
 	u_int32_t packet_crc32;
 	u_int32_t calculated_crc32;
 	int32_t pkt_size, buffer_size;
-	int rc, result;
+	int rc, result, ern;
 
 	alarm(0);
 	set_sig_handlers();
@@ -1100,6 +1101,7 @@ int read_response()
 #else
 	rc = read_packet(sd, NULL, &v2_receive_packet, &v3_receive_packet);
 #endif
+	ern = errno;
 
 	alarm(0);
 
@@ -1124,6 +1126,11 @@ int read_response()
 		if (packet_ver >= NRPE_PACKET_VERSION_3) {
 			return -1;
 		}
+		if (ern == 0)
+			printf("CHECK_NRPE: Error - Could not connect to %s: Check system logs on %s\n", rem_host, rem_host);
+		else
+			printf("CHECK_NRPE: Error - Could not connect to %s: %s\n", rem_host, strerror(ern));
+
 		return STATE_UNKNOWN;
 
 	} else if (rc == 0) {
@@ -1238,9 +1245,9 @@ int read_packet(int sock, void *ssl_ptr, v2_packet ** v2_pkt, v3_packet ** v3_pk
 		rc = recvall(sock, (char *)&packet, &tot_bytes, socket_timeout);
 
 		if (rc <= 0 || rc != bytes_to_recv) {
-			if (rc >= 0 && rc < bytes_to_recv) {
+			if (rc > 0 && rc < bytes_to_recv) {
 				if (packet_ver <= NRPE_PACKET_VERSION_3)
-					printf("CHECK_NRPE: Receive header underflow - only %d bytes received (%zu expected).\n", rc, sizeof(bytes_to_recv));
+					printf("CHECK_NRPE: Receive header underflow - only %d bytes received (%ld expected).\n", rc, (long)bytes_to_recv);
 			}
 			return -1;
 		}
@@ -1316,7 +1323,7 @@ int read_packet(int sock, void *ssl_ptr, v2_packet ** v2_pkt, v3_packet ** v3_pk
 				*v2_pkt = NULL;
 			}
 			if (rc < buffer_size)
-				printf("CHECK_NRPE: Receive underflow - only %d bytes received (%zu expected).\n", rc, sizeof(buffer_size));
+				printf("CHECK_NRPE: Receive underflow - only %d bytes received (%ld expected).\n", rc, (long)buffer_size);
 			return -1;
 		} else
 			tot_bytes += rc;
@@ -1330,9 +1337,9 @@ int read_packet(int sock, void *ssl_ptr, v2_packet ** v2_pkt, v3_packet ** v3_pk
 		}
 
 		if (rc <= 0 || rc != bytes_to_recv) {
-			if (rc < bytes_to_recv) {
+			if (rc > 0 && rc < bytes_to_recv) {
 				if (packet_ver < NRPE_PACKET_VERSION_3 || packet_ver > NRPE_PACKET_VERSION_4)
-					printf("CHECK_NRPE: Receive header underflow - only %d bytes received (%zu expected).\n", rc, sizeof(bytes_to_recv));
+					printf("CHECK_NRPE: Receive header underflow - only %d bytes received (%ld expected).\n", rc, (long)bytes_to_recv);
 			}
 			return -1;
 		}
@@ -1424,9 +1431,9 @@ int read_packet(int sock, void *ssl_ptr, v2_packet ** v2_pkt, v3_packet ** v3_pk
 			}
 			if (bytes_read != buffer_size) {
 				if (packet_ver >= NRPE_PACKET_VERSION_3) {
-					printf("CHECK_NRPE: Receive buffer size - %ld bytes received (%zu expected).\n", (long)bytes_read, sizeof(buffer_size));
+					printf("CHECK_NRPE: Receive buffer size - %ld bytes received (%ld expected).\n", (long)bytes_read, (long)buffer_size);
 				} else {
-					printf("CHECK_NRPE: Receive underflow - only %ld bytes received (%zu expected).\n", (long)bytes_read, sizeof(buffer_size));
+					printf("CHECK_NRPE: Receive underflow - only %ld bytes received (%ld expected).\n", (long)bytes_read, (long)buffer_size);
 				}
 			}
 			return -1;
