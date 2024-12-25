@@ -545,6 +545,7 @@ int is_an_allowed_host(int family, void *host)
 								if (debug == TRUE)
 									logit(LOG_INFO, "is_an_allowed_host (AF_INET): "
 											"host is in allowed host list!");
+								freeaddrinfo(res);
 								return 1;
 							}
 							break;
@@ -564,12 +565,15 @@ int is_an_allowed_host(int family, void *host)
 								if (debug == TRUE)
 									logit(LOG_INFO, "is_an_allowed_host (AF_INET6): "
 											"host is in allowed host list!");
+								freeaddrinfo(res);
 								return 1;
 							}
 							break;
 					}
 				}
 			}
+
+			freeaddrinfo(res);
 		}
 
 		dns_acl_curr = dns_acl_curr->next;
