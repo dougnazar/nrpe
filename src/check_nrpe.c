@@ -1056,16 +1056,11 @@ int send_request()
 	bytes_to_send = pkt_size;
 
 #ifdef HAVE_SSL
-	if (use_ssl == FALSE)
+	if (use_ssl)
+		rc = ssl_sendall(ssl, send_pkt, bytes_to_send);
+	else
 #endif
 		rc = sendall(sd, (char *)send_pkt, &bytes_to_send);
-#ifdef HAVE_SSL
-	else {
-		rc = SSL_write(ssl, send_pkt, bytes_to_send);
-		if (rc < 0)
-			rc = -1;
-	}
-#endif
 
 	if (v3_send_packet) {
 		free(v3_send_packet);
@@ -1230,9 +1225,6 @@ int read_response()
 
 int read_packet(int sock, void *ssl_ptr, v2_packet ** v2_pkt, v3_packet ** v3_pkt)
 {
-#ifdef HAVE_SSL
-	int32_t bytes_read = 0;
-#endif
 	v2_packet	packet;
 	int32_t pkt_size, common_size, tot_bytes, bytes_to_recv, buffer_size;
 	int rc;
@@ -1332,9 +1324,7 @@ int read_packet(int sock, void *ssl_ptr, v2_packet ** v2_pkt, v3_packet ** v3_pk
 	else {
 		SSL *ssl = (SSL *) ssl_ptr;
 
-		while (((rc = SSL_read(ssl, &packet, bytes_to_recv)) <= 0)
-			   && (SSL_get_error(ssl, rc) == SSL_ERROR_WANT_READ)) {
-		}
+		rc = ssl_recvall(ssl, (char *)&packet, &tot_bytes, socket_timeout);
 
 		if (rc <= 0 || rc != bytes_to_recv) {
 			if (rc > 0 && rc < bytes_to_recv) {
@@ -1374,20 +1364,14 @@ int read_packet(int sock, void *ssl_ptr, v2_packet ** v2_pkt, v3_packet ** v3_pk
 
 			/* Read the alignment filler */
 			bytes_to_recv = sizeof(int16_t);
-			while (((rc = SSL_read(ssl, &buffer_size, bytes_to_recv)) <= 0)
-				   && (SSL_get_error(ssl, rc) == SSL_ERROR_WANT_READ)) {
-			}
-
+			rc = ssl_recvall(ssl, (char *)&buffer_size, &bytes_to_recv, socket_timeout);
 			if (rc <= 0 || bytes_to_recv != sizeof(int16_t))
 				return -1;
 			tot_bytes += rc;
 
 			/* Read the buffer size */
 			bytes_to_recv = sizeof(buffer_size);
-			while (((rc = SSL_read(ssl, &buffer_size, bytes_to_recv)) <= 0)
-				   && (SSL_get_error(ssl, rc) == SSL_ERROR_WANT_READ)) {
-			}
-
+			rc = ssl_recvall(ssl, (char *)&buffer_size, &bytes_to_recv, socket_timeout);
 			if (rc <= 0 || bytes_to_recv != sizeof(buffer_size))
 				return -1;
 			tot_bytes += rc;
@@ -1409,19 +1393,9 @@ int read_packet(int sock, void *ssl_ptr, v2_packet ** v2_pkt, v3_packet ** v3_pk
 		}
 
 		bytes_to_recv = buffer_size;
-		for (;;) {
-			while (((rc = SSL_read(ssl, &buff_ptr[bytes_read], bytes_to_recv)) <= 0)
-				   && (SSL_get_error(ssl, rc) == SSL_ERROR_WANT_READ)) {
-			}
+		rc = ssl_recvall(ssl, buff_ptr, &bytes_to_recv, socket_timeout);
 
-			if (rc <= 0)
-				break;
-			bytes_read += rc;
-			bytes_to_recv -= rc;
-			tot_bytes += rc;
-		}
-
-		if (rc < 0 || bytes_read != buffer_size) {
+		if (rc <= 0 || rc != buffer_size) {
 			if (packet_ver >= NRPE_PACKET_VERSION_3) {
 				free(*v3_pkt);
 				*v3_pkt = NULL;
@@ -1429,11 +1403,11 @@ int read_packet(int sock, void *ssl_ptr, v2_packet ** v2_pkt, v3_packet ** v3_pk
 				free(*v2_pkt);
 				*v2_pkt = NULL;
 			}
-			if (bytes_read != buffer_size) {
+			if (rc > 0 && rc < buffer_size) {
 				if (packet_ver >= NRPE_PACKET_VERSION_3) {
-					printf("CHECK_NRPE: Receive buffer size - %ld bytes received (%ld expected).\n", (long)bytes_read, (long)buffer_size);
+					printf("CHECK_NRPE: Receive buffer size - %ld bytes received (%ld expected).\n", (long)rc, (long)buffer_size);
 				} else {
-					printf("CHECK_NRPE: Receive underflow - only %ld bytes received (%ld expected).\n", (long)bytes_read, (long)buffer_size);
+					printf("CHECK_NRPE: Receive underflow - only %ld bytes received (%ld expected).\n", (long)rc, (long)buffer_size);
 				}
 			}
 			return -1;

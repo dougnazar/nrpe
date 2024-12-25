@@ -1867,12 +1867,12 @@ void handle_connection(int sock)
 
 	/* send the response back to the client */
 	bytes_to_send = pkt_size;
-	if (use_ssl == FALSE)
-		sendall(sock, send_pkt, &bytes_to_send);
 #ifdef HAVE_SSL
+	if (use_ssl)
+		ssl_sendall(ssl, send_pkt, bytes_to_send);
 	else
-		SSL_write(ssl, send_pkt, bytes_to_send);
 #endif
+		sendall(sock, send_pkt, &bytes_to_send);
 
 #ifdef HAVE_SSL
 	if (ssl) {
@@ -2076,28 +2076,8 @@ int read_packet(int sock, void *ssl_ptr, v2_packet * v2_pkt, v3_packet ** v3_pkt
 #ifdef HAVE_SSL
 	else {
 		SSL      *ssl = (SSL *) ssl_ptr;
-		int       sockfd, retval;
-		fd_set    rfds;
-		struct timeval timeout;
 
-		sockfd = SSL_get_fd(ssl);
-
-		FD_ZERO(&rfds);
-		FD_SET(sockfd, &rfds);
-
-		timeout.tv_sec = connection_timeout;
-		timeout.tv_usec = 0;
-
-		do {
-			retval = select(sockfd + 1, &rfds, NULL, NULL, &timeout);
-
-			if (retval > 0) {
-				rc = SSL_read(ssl, v2_pkt, bytes_to_recv);
-			} else {
-				logit(LOG_ERR, "Error (!log_opts): Could not complete SSL_read with %s: timeout %d seconds", remote_host, connection_timeout);
-				return -1;
-			}
-		} while (SSL_get_error(ssl, rc) == SSL_ERROR_WANT_READ);
+		rc = ssl_recvall(ssl, (char *)v2_pkt, &tot_bytes, socket_timeout);
 
 		if (rc <= 0 || rc != bytes_to_recv)
 			return -1;
@@ -2122,9 +2102,7 @@ int read_packet(int sock, void *ssl_ptr, v2_packet * v2_pkt, v3_packet ** v3_pkt
 
 			/* Read the alignment filler */
 			bytes_to_recv = sizeof(int16_t);
-			while (((rc = SSL_read(ssl, &buffer_size, bytes_to_recv)) <= 0)
-				   && (SSL_get_error(ssl, rc) == SSL_ERROR_WANT_READ)) {
-			}
+			rc = ssl_recvall(ssl, (char *)&buffer_size, &bytes_to_recv, socket_timeout);
 
 			if (rc <= 0 || bytes_to_recv != sizeof(int16_t))
 				return -1;
@@ -2132,9 +2110,7 @@ int read_packet(int sock, void *ssl_ptr, v2_packet * v2_pkt, v3_packet ** v3_pkt
 
 			/* Read the buffer size */
 			bytes_to_recv = sizeof(buffer_size);
-			while (((rc = SSL_read(ssl, &buffer_size, bytes_to_recv)) <= 0)
-				   && (SSL_get_error(ssl, rc) == SSL_ERROR_WANT_READ)) {
-			}
+			rc = ssl_recvall(ssl, (char *)&buffer_size, &bytes_to_recv, socket_timeout);
 
 			if (rc <= 0 || bytes_to_recv != sizeof(buffer_size))
 				return -1;
@@ -2157,9 +2133,7 @@ int read_packet(int sock, void *ssl_ptr, v2_packet * v2_pkt, v3_packet ** v3_pkt
 		}
 
 		bytes_to_recv = buffer_size;
-		while (((rc = SSL_read(ssl, buff_ptr, bytes_to_recv)) <= 0)
-			   && (SSL_get_error(ssl, rc) == SSL_ERROR_WANT_READ)) {
-		}
+		rc = ssl_recvall(ssl, buff_ptr, &bytes_to_recv, socket_timeout);
 
 		if (rc <= 0 || rc != buffer_size) {
 			if (packet_ver == NRPE_PACKET_VERSION_3) {
