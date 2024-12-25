@@ -1382,6 +1382,7 @@ void conn_check_peer(int sock)
 
 	char      ipstr[INET6_ADDRSTRLEN];
 	socklen_t addrlen;
+	int       remote_port = 0;
 	int       rc;
 
 	/* find out who just connected... */
@@ -1408,6 +1409,7 @@ void conn_check_peer(int sock)
 		nptr = (struct sockaddr_in *)&addr;
 		strncpy(remote_host, inet_ntoa(nptr->sin_addr), sizeof(remote_host) - 1);
 		remote_host[MAX_HOST_ADDRESS_LENGTH - 1] = '\0';
+		remote_port = ntohs(nptr->sin_port);
 		break;
 
 	case AF_INET6:
@@ -1418,12 +1420,13 @@ void conn_check_peer(int sock)
 		}
 		strncpy(remote_host, ipstr, sizeof(remote_host) - 1);
 		remote_host[MAX_HOST_ADDRESS_LENGTH - 1] = '\0';
+		remote_port = ntohs(nptr6->sin6_port);
 		break;
 	}
 
 	if (debug == TRUE)
 		logit(LOG_INFO, "CONN_CHECK_PEER: checking if host is allowed: %s port %d\n",
-			 remote_host, nptr->sin_port);
+			 remote_host, remote_port);
 
 	/* is this host allowed? */
 	if (allowed_hosts) {
@@ -1436,7 +1439,7 @@ void conn_check_peer(int sock)
 		case AF_INET:
 			/* log info */
 			if (debug == TRUE || (sslprm.log_opts & SSL_LogIpAddr))
-				logit(LOG_DEBUG, "Connection from %s port %d", remote_host, nptr->sin_port);
+				logit(LOG_DEBUG, "Connection from %s port %d", remote_host, remote_port);
 
 			if (!is_an_allowed_host(AF_INET, (void *)&(nptr->sin_addr))) {
 				/* log error */
@@ -1462,10 +1465,8 @@ void conn_check_peer(int sock)
 
 		case AF_INET6:
 			/* log info */
-			strncpy(remote_host, ipstr, sizeof(remote_host));
-			remote_host[sizeof(remote_host) - 1] = '\0';
 			if (debug == TRUE || (sslprm.log_opts & SSL_LogIpAddr)) {
-				logit(LOG_DEBUG, "Connection from %s port %d", ipstr, nptr6->sin6_port);
+				logit(LOG_DEBUG, "Connection from %s port %d", remote_host, remote_port);
 			}
 
 			if (!is_an_allowed_host(AF_INET6, (void *)&(nptr6->sin6_addr))) {
