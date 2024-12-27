@@ -1372,6 +1372,8 @@ void wait_for_connections(void)
 				break;			/* else handle the error later */
 			}
 
+			/* ensure socket is non-blocking */
+			fcntl(new_sd, F_SETFL, O_NONBLOCK);
 
 			rc = wait_conn_fork(new_sd);
 			if (rc == TRUE)
@@ -2056,6 +2058,7 @@ int read_packet(int sock, void *ssl_ptr, v2_packet * v2_pkt, v3_packet ** v3_pkt
 			logit(LOG_ERR, "Error: (use_ssl == false): Request packet version was invalid!");
 			return -1;
 		}
+		logit(LOG_DEBUG, "Received v%i packet", packet_ver);
 
 		if (packet_ver == NRPE_PACKET_VERSION_2) {
 			buffer_size = sizeof(v2_packet) - common_size;
@@ -2120,6 +2123,7 @@ int read_packet(int sock, void *ssl_ptr, v2_packet * v2_pkt, v3_packet ** v3_pkt
 			logit(LOG_ERR, "Error: (use_ssl == true): Request packet version was invalid!");
 			return -1;
 		}
+		logit(LOG_DEBUG, "Received v%i packet", packet_ver);
 
 		if (packet_ver == NRPE_PACKET_VERSION_2) {
 			buffer_size = sizeof(v2_packet) - common_size;

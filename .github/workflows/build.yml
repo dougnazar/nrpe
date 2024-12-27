@@ -24,21 +24,25 @@ jobs:
       run: |
         cd build
         make all
-    - name: test
-      run: |
-        cd build
-        make test
 
-    - name: configure no ssl
+    - name: configure [no ssl]
       run: |
         mkdir build_nossl
         cd build_nossl
         ../nrpe/configure --disable-ssl
-    - name: build no ssl
+    - name: build [no ssl]
       run: |
         cd build_nossl
         make all
-    - name: test no ssl
+
+    - name: install test prerequisites
+      run: |
+        sudo apt-get -y install libio-socket-ssl-perl libdigest-crc-perl
+    - name: test
+      run: |
+        cd build
+        make test
+    - name: test [no ssl]
       run: |
         cd build_nossl
         make test

@@ -7,7 +7,7 @@ BEGIN {
     use lib (dirname(__FILE__));
 }
 
-use Test::More tests => 32;
+use Test::More tests => 44;
 use Digest::SHA qw(sha1_hex);
 use nrpe;
 
@@ -111,5 +111,37 @@ like($output[0], qr/NRPE: Unable to read output/, 'nonexistent command response'
 is($?, STATE_UNKNOWN, 'timeout command');
 like($output[0], qr/NRPE: Command timed out after 5 seconds/, 'timeout command response');
 
+
+SKIP: {
+    @output = `$checknrpe -H 127.0.0.1 -p 40321 -2 -c state_ok`;
+    is($?, STATE_OK, "v2 state_ok exec") || diag @output && skip 'failed exec', 2;
+
+    is(@output, 1, 'v2 state_ok result lines');
+    is($output[0], "OK: Everything is normal\n", 'v2 state_ok result');
+}
+
+SKIP: {
+    @output = `$checknrpe -H 127.0.0.1 -p 40321 -2 -c ""`;
+    is($?, STATE_UNKNOWN, "v2 null exec") || diag @output && skip 'failed exec', 2;
+
+    is(@output, 1, 'v2 null result lines');
+    like($output[0], qr/CHECK_NRPE: Error - Could not connect to .*: /, 'v2 null result');
+}
+
+SKIP: {
+    @output = `$checknrpe -H 127.0.0.1 -p 40321 -c "state_ok" -a 1 2 3`;
+    is($?, STATE_UNKNOWN, "args exec") || diag @output && skip 'failed exec', 2;
+
+    is(@output, 1, 'args - result lines');
+    like($output[0], qr/CHECK_NRPE: Error - Could not connect to .*: /, 'args - result');
+}
+
+SKIP: {
+    @output = `$checknrpe -H 127.0.0.1 -p 40321 -c "< >"`;
+    is($?, STATE_UNKNOWN, "metachars - exec") || diag @output && skip 'failed exec', 2;
+
+    is(@output, 1, 'metachars - result lines');
+    like($output[0], qr/CHECK_NRPE: Error - Could not connect to .*: /, 'metachars - result');
+}
 
 done_testing();
